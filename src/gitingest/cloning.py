@@ -37,6 +37,7 @@ async def clone_repo(config: CloneConfig) -> None:
     local_path: str = config.local_path
     commit: Optional[str] = config.commit
     branch: Optional[str] = config.branch
+    tag: Optional[str] = config.tag
     partial_clone: bool = config.subpath != "/"
 
     # Create parent directory if it doesn't exist
@@ -60,6 +61,8 @@ async def clone_repo(config: CloneConfig) -> None:
         clone_cmd += ["--depth=1"]
         if branch and branch.lower() not in ("main", "master"):
             clone_cmd += ["--branch", branch]
+        elif tag:
+            clone_cmd += ["--branch", f"refs/tags/{tag}"]
 
     clone_cmd += [url, local_path]
 
@@ -67,7 +70,7 @@ async def clone_repo(config: CloneConfig) -> None:
     await ensure_git_installed()
     await run_command(*clone_cmd)
 
-    if commit or partial_clone:
+    if commit or partial_clone or tag:
         checkout_cmd = ["git", "-C", local_path]
 
         if partial_clone:
@@ -80,6 +83,8 @@ async def clone_repo(config: CloneConfig) -> None:
 
         if commit:
             checkout_cmd += ["checkout", commit]
+        elif tag and not branch:  # Only checkout the tag if we didn't already specify it at clone time
+            checkout_cmd += ["checkout", f"tags/{tag}"]
 
         # Check out the specific commit and/or subpath
         await run_command(*checkout_cmd)

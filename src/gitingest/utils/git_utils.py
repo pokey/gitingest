@@ -116,3 +116,32 @@ async def fetch_remote_branch_list(url: str) -> List[str]:
         for line in stdout_decoded.splitlines()
         if line.strip() and "refs/heads/" in line
     ]
+
+
+async def fetch_remote_tag_list(url: str) -> List[str]:
+    """
+    Fetch the list of tags from a remote Git repository.
+    Parameters
+    ----------
+    url : str
+        The URL of the Git repository to fetch tags from.
+    Returns
+    -------
+    List[str]
+        A list of tag names available in the remote repository.
+    """
+    fetch_tags_command = ["git", "ls-remote", "--tags", url]
+    await ensure_git_installed()
+    stdout, _ = await run_command(*fetch_tags_command)
+    stdout_decoded = stdout.decode()
+
+    # Extract tag names, filtering out refs/tags/<tag>^{} entries
+    tags = []
+    for line in stdout_decoded.splitlines():
+        if line.strip() and "refs/tags/" in line:
+            tag_ref = line.split("refs/tags/", 1)[1]
+            # Skip annotated tag dereferenced entries (tag^{})
+            if not tag_ref.endswith("^{}"):
+                tags.append(tag_ref)
+
+    return tags

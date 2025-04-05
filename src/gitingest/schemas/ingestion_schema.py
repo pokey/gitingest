@@ -35,6 +35,7 @@ class CloneConfig:
     local_path: str
     commit: Optional[str] = None
     branch: Optional[str] = None
+    tag: Optional[str] = None
     subpath: str = "/"
     blob: bool = False
 
@@ -53,6 +54,7 @@ class IngestionQuery(BaseModel):  # pylint: disable=too-many-instance-attributes
     subpath: str = "/"
     type: Optional[str] = None
     branch: Optional[str] = None
+    tag: Optional[str] = None
     commit: Optional[str] = None
     max_file_size: int = Field(default=MAX_FILE_SIZE)
     ignore_patterns: Optional[Set[str]] = None
@@ -82,6 +84,7 @@ class IngestionQuery(BaseModel):  # pylint: disable=too-many-instance-attributes
             local_path=str(self.local_path),
             commit=self.commit,
             branch=self.branch,
+            tag=self.tag,
             subpath=self.subpath,
             blob=self.type == "blob",
         )

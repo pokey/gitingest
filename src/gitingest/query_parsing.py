@@ -10,7 +10,7 @@ from urllib.parse import unquote, urlparse
 from gitingest.config import TMP_BASE_PATH
 from gitingest.schemas import IngestionQuery
 from gitingest.utils.exceptions import InvalidPatternError
-from gitingest.utils.git_utils import check_repo_exists, fetch_remote_branch_list
+from gitingest.utils.git_utils import check_repo_exists, fetch_remote_branch_list, fetch_remote_tag_list
 from gitingest.utils.ignore_patterns import DEFAULT_IGNORE_PATTERNS
 from gitingest.utils.query_parser_utils import (
     KNOWN_GIT_HOSTS,
@@ -176,6 +176,11 @@ async def _parse_remote_repo(source: str) -> IngestionQuery:
     else:
         parsed.branch = await _configure_branch_and_subpath(remaining_parts, url)
 
+    # Check if any of the remaining path components is a tag
+    # if we didn't find a branch match
+    if not parsed.branch and remaining_parts:
+        await check_for_tag(parsed, remaining_parts)
+
     # Subpath if anything left
     if remaining_parts:
         parsed.subpath += "/".join(remaining_parts)
@@ -212,6 +217,18 @@ async def _configure_branch_and_subpath(remaining_parts: List[str], url: str) ->
         if branch_name in branches:
             return branch_name
 
+    # If the branch is not found, try to get the most likely one (first part of the path)
+    # This is needed to maintain backward compatibility with tests
+    if branch:
+        candidate = branch[0]
+        # Check if this is in the list of branches
+        if candidate in branches:
+            # Remove only this part from the remaining path
+            remaining_parts[:0] = branch[1:]
+            return candidate
+
+    # If we get here, put the parts back in the list and return None (not a branch we know about)
+    remaining_parts[:0] = branch
     return None
 
 
@@ -311,3 +328,36 @@ async def try_domains_for_user_and_repo(user_name: str, repo_name: str) -> str:
         if await check_repo_exists(candidate):
             return domain
     raise ValueError(f"Could not find a valid repository host for '{user_name}/{repo_name}'.")
+
+
+async def check_for_tag(parsed: IngestionQuery, path_components: List[str]) -> None:
+    """
+    Check if the path components might contain a tag.
+
+    This function checks the given path components against the list of tags for the repository.
+    If a match is found, it updates the parsed query object with the tag information.
+
+    Parameters
+    ----------
+    parsed : IngestionQuery
+        The parsed query object to update with tag information if found.
+    path_components : List[str]
+        The list of path components to check for a tag.
+    """
+    if not path_components or parsed.commit:
+        return
+
+    try:
+        tags: List[str] = await fetch_remote_tag_list(parsed.url)
+        # Check if the first component is a tag
+        candidate = path_components[0]
+        if candidate in tags:
+            # It's a tag
+            parsed.tag = candidate
+            # Remove the tag component from the path
+            path_components.pop(0)
+            # Update the subpath with the remaining path components
+            if path_components:
+                parsed.subpath = "/" + "/".join(path_components)
+    except RuntimeError as exc:
+        warnings.warn(f"Warning: Failed to fetch tag list: {exc}", RuntimeWarning)

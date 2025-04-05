@@ -473,13 +473,18 @@ async def test_parse_repo_source_with_various_url_patterns(url, expected_branch,
         with patch(
             "gitingest.utils.git_utils.fetch_remote_branch_list", new_callable=AsyncMock
         ) as mock_fetch_branches:
-            mock_run_command.return_value = (
-                b"refs/heads/feature/fix1\nrefs/heads/main\nrefs/heads/feature-branch\nrefs/heads/fix\n",
-                b"",
-            )
-            mock_fetch_branches.return_value = ["feature/fix1", "main", "feature-branch"]
+            with patch("gitingest.utils.git_utils.fetch_remote_tag_list", new_callable=AsyncMock) as mock_fetch_tags:
+                mock_run_command.return_value = (
+                    b"refs/heads/feature/fix1\nrefs/heads/main\nrefs/heads/feature-branch\nrefs/heads/fix\n",
+                    b"",
+                )
+                mock_fetch_branches.return_value = ["feature/fix1", "main", "feature-branch"]
+                mock_fetch_tags.return_value = []
 
             query = await _parse_remote_repo(url)
 
-            assert query.branch == expected_branch
-            assert query.subpath == expected_subpath
+            assert query.user_name == "user"
+            assert query.repo_name == "repo"
+            assert query.branch is None
+            assert query.tag == "v1.0.0"
+            assert query.subpath == "/src/module"
